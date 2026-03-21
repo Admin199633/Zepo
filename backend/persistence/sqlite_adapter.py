@@ -41,10 +41,12 @@ metadata = sa.MetaData()
 
 users_table = sa.Table(
     "users", metadata,
-    sa.Column("id",           sa.String,  primary_key=True),
-    sa.Column("phone_number", sa.String,  nullable=False, unique=True),
-    sa.Column("display_name", sa.String,  nullable=False),
-    sa.Column("created_at",   sa.Float,   nullable=False),
+    sa.Column("id",            sa.String,  primary_key=True),
+    sa.Column("phone_number",  sa.String,  nullable=True),   # NULL for username-auth users
+    sa.Column("display_name",  sa.String,  nullable=False),
+    sa.Column("created_at",    sa.Float,   nullable=False),
+    sa.Column("username",      sa.String,  nullable=False, server_default=""),
+    sa.Column("password_hash", sa.String,  nullable=False, server_default=""),
 )
 
 clubs_table = sa.Table(
@@ -151,11 +153,42 @@ class SqlitePersistenceAdapter(PersistenceAdapter):
     async def initialize(self) -> None:
         """
         Create engine and run CREATE TABLE IF NOT EXISTS for all tables.
-        Call once at app startup before wiring into singletons. Idempotent.
+        Migrates the users table to the new schema if needed (adds username /
+        password_hash columns, drops the old phone_number UNIQUE constraint in
+        favour of partial unique indexes). Idempotent.
         """
         self._engine = create_async_engine(self._database_url, echo=False)
         async with self._engine.begin() as conn:
+            # Detect whether the users table needs migration
+            res = await conn.execute(sa.text("PRAGMA table_info(users)"))
+            users_cols = {row[1] for row in res.fetchall()}
+            needs_migration = bool(users_cols) and "username" not in users_cols
+
+            if needs_migration:
+                # Rename old table, recreate with new schema, copy data, drop old
+                await conn.execute(sa.text("ALTER TABLE users RENAME TO _users_old"))
+
             await conn.run_sync(metadata.create_all)
+
+            if needs_migration:
+                await conn.execute(sa.text(
+                    "INSERT INTO users "
+                    "(id, phone_number, display_name, created_at, username, password_hash) "
+                    "SELECT id, phone_number, display_name, created_at, '', '' "
+                    "FROM _users_old"
+                ))
+                await conn.execute(sa.text("DROP TABLE _users_old"))
+
+            # Partial unique indexes (idempotent — replace old blanket unique index)
+            await conn.execute(sa.text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone "
+                "ON users (phone_number) "
+                "WHERE phone_number IS NOT NULL AND phone_number != ''"
+            ))
+            await conn.execute(sa.text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username "
+                "ON users (username) WHERE username != ''"
+            ))
 
     # ------------------------------------------------------------------
     # Users
@@ -166,39 +199,44 @@ class SqlitePersistenceAdapter(PersistenceAdapter):
             await conn.execute(
                 users_table.insert().prefix_with("OR REPLACE").values(
                     id=user.id,
-                    phone_number=user.phone_number,
+                    phone_number=user.phone_number or None,  # "" → NULL (avoids UNIQUE conflict)
                     display_name=user.display_name,
                     created_at=user.created_at,
+                    username=user.username,
+                    password_hash=user.password_hash,
                 )
             )
+
+    def _row_to_user(self, row) -> User:
+        return User(
+            id=row.id,
+            phone_number=row.phone_number or "",
+            display_name=row.display_name,
+            created_at=row.created_at,
+            username=row.username or "",
+            password_hash=row.password_hash or "",
+        )
 
     async def get_user(self, user_id: str) -> Optional[User]:
         async with self._engine.connect() as conn:
             row = (await conn.execute(
                 users_table.select().where(users_table.c.id == user_id)
             )).first()
-        if row is None:
-            return None
-        return User(
-            id=row.id,
-            phone_number=row.phone_number,
-            display_name=row.display_name,
-            created_at=row.created_at,
-        )
+        return self._row_to_user(row) if row else None
 
     async def get_user_by_phone(self, phone_number: str) -> Optional[User]:
         async with self._engine.connect() as conn:
             row = (await conn.execute(
                 users_table.select().where(users_table.c.phone_number == phone_number)
             )).first()
-        if row is None:
-            return None
-        return User(
-            id=row.id,
-            phone_number=row.phone_number,
-            display_name=row.display_name,
-            created_at=row.created_at,
-        )
+        return self._row_to_user(row) if row else None
+
+    async def get_user_by_username(self, username: str) -> Optional[User]:
+        async with self._engine.connect() as conn:
+            row = (await conn.execute(
+                users_table.select().where(users_table.c.username == username)
+            )).first()
+        return self._row_to_user(row) if row else None
 
     # ------------------------------------------------------------------
     # Clubs

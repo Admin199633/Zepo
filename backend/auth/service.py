@@ -14,6 +14,14 @@ from .models import AuthToken, User
 class AuthService(Protocol):
     """Interface for authentication operations."""
 
+    async def register(self, username: str, password: str, display_name: str) -> AuthToken:
+        """Create a new user. Raises ValueError if username taken or fields invalid."""
+        ...
+
+    async def login(self, username: str, password: str) -> AuthToken:
+        """Authenticate by username+password. Raises ValueError on bad credentials."""
+        ...
+
     async def request_otp(self, phone_number: str) -> None:
         """Send OTP to phone_number. Raises ValueError on invalid number."""
         ...
@@ -44,12 +52,62 @@ class AuthService(Protocol):
 class ConsoleAuthService:
     """
     Development-only auth service.
-    Accepts any 6-digit code that matches the last sent OTP.
+    Supports username/password register+login for playtesting.
+    Legacy OTP methods retained for simulation test compatibility.
     """
 
     def __init__(self, persistence: "PersistenceAdapter") -> None:  # type: ignore[name-defined]
         self._persistence = persistence
-        self._otps: dict[str, str] = {}  # phone → code
+        self._otps: dict[str, str] = {}  # phone → code (legacy OTP)
+
+    # ------------------------------------------------------------------
+    # Username / password (playtesting)
+    # ------------------------------------------------------------------
+
+    async def register(
+        self, username: str, password: str, display_name: str
+    ) -> AuthToken:
+        import bcrypt, time, uuid
+        username = username.strip()
+        display_name = display_name.strip()
+        if not username:
+            raise ValueError("username required")
+        if not display_name:
+            raise ValueError("display_name required")
+        if not password:
+            raise ValueError("password required")
+
+        existing = await self._persistence.get_user_by_username(username)
+        if existing is not None:
+            raise ValueError("Username already taken")
+
+        pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+        user = User(
+            id=str(uuid.uuid4()),
+            phone_number="",
+            display_name=display_name,
+            created_at=time.time(),
+            username=username,
+            password_hash=pw_hash,
+        )
+        await self._persistence.save_user(user)
+        return self._mint_token(user)
+
+    async def login(self, username: str, password: str) -> AuthToken:
+        import bcrypt
+        username = username.strip()
+        user = await self._persistence.get_user_by_username(username)
+        if user is None:
+            raise ValueError("Invalid username or password")
+
+        if not bcrypt.checkpw(password.encode(), user.password_hash.encode()):
+            raise ValueError("Invalid username or password")
+
+        return self._mint_token(user)
+
+    # ------------------------------------------------------------------
+    # Legacy OTP (kept for simulation tests)
+    # ------------------------------------------------------------------
 
     async def request_otp(self, phone_number: str) -> None:
         import random
@@ -82,7 +140,6 @@ class ConsoleAuthService:
         return token
 
     async def verify_token(self, token: str) -> User:
-        # Stub: decode user_id from token prefix "dev_<user_id>"
         if not token.startswith("dev_"):
             raise ValueError("Invalid token")
         user_id = token[4:]

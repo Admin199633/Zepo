@@ -26,8 +26,9 @@ from .adapter import PersistenceAdapter
 class InMemoryPersistenceAdapter(PersistenceAdapter):
 
     def __init__(self) -> None:
-        self._users:           dict[str, User]             = {}   # user_id → User
-        self._users_by_phone:  dict[str, str]              = {}   # phone → user_id
+        self._users:            dict[str, User]             = {}   # user_id → User
+        self._users_by_phone:   dict[str, str]              = {}   # phone → user_id
+        self._users_by_username: dict[str, str]             = {}   # username → user_id
         self._clubs:           dict[str, Club]             = {}   # club_id → Club
         self._clubs_by_invite: dict[str, str]              = {}   # invite_code → club_id
         self._tables:          dict[str, TableRecord]      = {}   # table_id → TableRecord
@@ -44,7 +45,10 @@ class InMemoryPersistenceAdapter(PersistenceAdapter):
 
     async def save_user(self, user: User) -> None:
         self._users[user.id] = copy.deepcopy(user)
-        self._users_by_phone[user.phone_number] = user.id
+        if user.phone_number:
+            self._users_by_phone[user.phone_number] = user.id
+        if user.username:
+            self._users_by_username[user.username] = user.id
 
     async def get_user(self, user_id: str) -> Optional[User]:
         u = self._users.get(user_id)
@@ -52,6 +56,12 @@ class InMemoryPersistenceAdapter(PersistenceAdapter):
 
     async def get_user_by_phone(self, phone_number: str) -> Optional[User]:
         uid = self._users_by_phone.get(phone_number)
+        if uid is None:
+            return None
+        return await self.get_user(uid)
+
+    async def get_user_by_username(self, username: str) -> Optional[User]:
+        uid = self._users_by_username.get(username)
         if uid is None:
             return None
         return await self.get_user(uid)

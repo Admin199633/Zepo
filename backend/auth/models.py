@@ -10,12 +10,15 @@ from enum import Enum
 @dataclass
 class User:
     id: str
-    phone_number: str          # E.164 format: +972501234567
+    phone_number: str          # E.164 for OTP users; "" for username-auth users
     display_name: str
     created_at: float = 0.0    # epoch seconds
+    username: str = ""         # unique username for password-auth users
+    password_hash: str = ""    # bcrypt hash; "" for OTP users
 
     def __post_init__(self) -> None:
-        assert self.phone_number.startswith("+"), "Phone must be E.164"
+        assert len(self.phone_number.strip()) >= 1 or len(self.username.strip()) >= 1, \
+            "phone_number or username required"
         assert len(self.display_name.strip()) >= 1, "display_name required"
 
 

@@ -9,32 +9,49 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { requestOtp } from '../../src/api/auth';
+import { login, register } from '../../src/api/auth';
 import { extractErrorMessage } from '../../src/api/client';
+import { useAuthStore } from '../../src/store/authStore';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const [phone, setPhone] = useState('');
+  const loginStore = useAuthStore((s) => s.login);
+
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSend = async () => {
-    const trimmed = phone.trim();
-    if (!trimmed) {
-      setError('Please enter your phone number.');
+  const handleSubmit = async () => {
+    const u = username.trim();
+    const p = password.trim();
+    if (!u || !p) {
+      setError('Username and password are required.');
+      return;
+    }
+    if (mode === 'register' && !displayName.trim()) {
+      setError('Display name is required.');
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      await requestOtp(trimmed);
-      router.push({ pathname: '/(auth)/verify', params: { phone: trimmed } });
+      const response =
+        mode === 'register'
+          ? await register(u, p, displayName.trim())
+          : await login(u, p);
+      await loginStore(response.token, response.user_id);
+      router.replace('/(app)');
     } catch (err) {
       setError(extractErrorMessage(err));
     } finally {
       setLoading(false);
     }
   };
+
+  const isRegister = mode === 'register';
 
   return (
     <KeyboardAvoidingView
@@ -43,16 +60,38 @@ export default function LoginScreen() {
     >
       <View style={styles.container}>
         <Text style={styles.title}>Zepo</Text>
-        <Text style={styles.subtitle}>Enter your phone number to get started</Text>
+        <Text style={styles.subtitle}>
+          {isRegister ? 'Create an account' : 'Sign in to play'}
+        </Text>
 
         <TextInput
           style={styles.input}
-          placeholder="+1 555 000 0000"
-          keyboardType="phone-pad"
-          autoComplete="tel"
-          textContentType="telephoneNumber"
-          value={phone}
-          onChangeText={setPhone}
+          placeholder="Username"
+          autoCapitalize="none"
+          autoCorrect={false}
+          value={username}
+          onChangeText={setUsername}
+          editable={!loading}
+        />
+
+        {isRegister && (
+          <TextInput
+            style={styles.input}
+            placeholder="Display name"
+            autoCapitalize="words"
+            value={displayName}
+            onChangeText={setDisplayName}
+            editable={!loading}
+          />
+        )}
+
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          secureTextEntry
+          textContentType={isRegister ? 'newPassword' : 'password'}
+          value={password}
+          onChangeText={setPassword}
           editable={!loading}
         />
 
@@ -60,10 +99,22 @@ export default function LoginScreen() {
 
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleSend}
+          onPress={handleSubmit}
           disabled={loading}
         >
-          <Text style={styles.buttonText}>{loading ? 'Sending…' : 'Send code'}</Text>
+          <Text style={styles.buttonText}>
+            {loading ? '…' : isRegister ? 'Register' : 'Sign in'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.toggle}
+          onPress={() => { setMode(isRegister ? 'login' : 'register'); setError(null); }}
+          disabled={loading}
+        >
+          <Text style={styles.toggleText}>
+            {isRegister ? 'Already have an account? Sign in' : "Don't have an account? Register"}
+          </Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -94,7 +145,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 16,
     alignItems: 'center',
+    marginBottom: 16,
   },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  toggle: { alignItems: 'center' },
+  toggleText: { color: '#94A3B8', fontSize: 14 },
 });

@@ -7,6 +7,24 @@
 // Auth
 // ---------------------------------------------------------------------------
 
+export interface RegisterBody {
+  username: string;
+  password: string;
+  display_name: string;
+}
+
+export interface LoginBody {
+  username: string;
+  password: string;
+}
+
+export interface TokenResponse {
+  token: string;
+  user_id: string;
+  expires_at: number;
+}
+
+// Legacy OTP types (used by simulation tests only)
 export interface OtpRequestBody {
   phone_number: string;
 }
@@ -15,12 +33,6 @@ export interface OtpVerifyBody {
   phone_number: string;
   code: string;
   display_name?: string;
-}
-
-export interface TokenResponse {
-  token: string;
-  user_id: string;
-  expires_at: number;
 }
 
 // ---------------------------------------------------------------------------

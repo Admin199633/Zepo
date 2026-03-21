@@ -37,6 +37,9 @@ class PersistenceAdapter(ABC):
     @abstractmethod
     async def get_user_by_phone(self, phone_number: str) -> Optional[User]: ...
 
+    @abstractmethod
+    async def get_user_by_username(self, username: str) -> Optional[User]: ...
+
     # -----------------------------------------------------------------------
     # Clubs
     # -----------------------------------------------------------------------
