@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Zepo",
+    "slug": "zepo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "zepo",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.zepo.mobile"
+    },
+    "android": {
+      "package": "com.zepo.mobile"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

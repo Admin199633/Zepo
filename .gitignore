@@ -1,0 +1,33 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Env
+.env
+.env.local
+.env.*
+
+# Node / Expo (כללי)
+node_modules/
+.expo/
+dist/
+build/
+
+# Mobile ספציפי
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/build/
+
+mobile1/node_modules/
+mobile1/.expo/
+mobile1/dist/
+mobile1/build/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
