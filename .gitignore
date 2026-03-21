@@ -31,3 +31,30 @@ mobile1/build/
 # OS
 .DS_Store
 Thumbs.db
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual env
+venv/
+.venv/
+
+# Env files
+.env
+.env.local
+.env.*
+
+# Node / Expo
+node_modules/
+.expo/
+dist/
+build/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
