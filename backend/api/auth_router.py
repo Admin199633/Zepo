@@ -63,6 +63,7 @@ class TokenResponse(BaseModel):
     token: str
     user_id: str
     expires_at: float
+    display_name: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +85,7 @@ async def register(
         token=auth_token.token,
         user_id=auth_token.user_id,
         expires_at=auth_token.expires_at,
+        display_name=auth_token.display_name,
     )
 
 
@@ -100,6 +102,7 @@ async def login(
         token=auth_token.token,
         user_id=auth_token.user_id,
         expires_at=auth_token.expires_at,
+        display_name=auth_token.display_name,
     )
 
 
@@ -134,4 +137,5 @@ async def verify_otp(
         token=auth_token.token,
         user_id=auth_token.user_id,
         expires_at=auth_token.expires_at,
+        display_name=auth_token.display_name,
     )

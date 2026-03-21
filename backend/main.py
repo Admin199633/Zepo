@@ -20,7 +20,7 @@ from .api.health_router import router as health_router
 from .api.tables_router import router as tables_router
 from .auth.service import ConsoleAuthService
 from .config import settings
-from .dev_seed import seed_demo_data
+from .dev_seed import seed_admin_user, seed_demo_data
 from .persistence.memory import InMemoryPersistenceAdapter
 from .persistence.sqlite_adapter import SqlitePersistenceAdapter
 from .realtime.ws_broadcaster import WebSocketBroadcaster
@@ -31,7 +31,8 @@ from .session_registry import TableSessionRegistry
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ---- Startup ----
-    if settings.use_sqlite:
+    # SQLite is used when explicitly enabled OR when running in production
+    if settings.use_sqlite or settings.app_env == "production":
         persistence = SqlitePersistenceAdapter(settings.database_url)
         await persistence.initialize()
     else:
@@ -45,6 +46,7 @@ async def lifespan(app: FastAPI):
     app.state.registry = registry
     app.state.auth_service = auth_service
 
+    await seed_admin_user(persistence)  # always — idempotent
     if settings.app_env != "production":
         await seed_demo_data(persistence)
 

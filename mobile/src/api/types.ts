@@ -22,6 +22,7 @@ export interface TokenResponse {
   token: string;
   user_id: string;
   expires_at: number;
+  display_name: string;
 }
 
 // Legacy OTP types (used by simulation tests only)

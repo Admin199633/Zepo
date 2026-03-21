@@ -470,6 +470,9 @@ class TableSessionManager:
         await self._send_snapshot_to(user_id, snapshot)
         await self._emit_analytics(AnalyticsEventType.RECONNECT, user_id)
 
+        # If enough players are now ready, start the next hand
+        await self._maybe_start_hand_unlocked()
+
         return ReconnectResult(success=True, role="player")
 
     # -----------------------------------------------------------------------

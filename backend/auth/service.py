@@ -154,4 +154,5 @@ class ConsoleAuthService:
             user_id=user.id,
             token=f"dev_{user.id}",
             expires_at=time.time() + 86400,
+            display_name=user.display_name,
         )

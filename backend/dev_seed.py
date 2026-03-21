@@ -36,6 +36,25 @@ _DEMO_CONFIG = TableConfig(
 )
 
 
+async def seed_admin_user(persistence: PersistenceAdapter) -> None:
+    """Create the built-in Admin user. Idempotent — skips if already present."""
+    existing = await persistence.get_user_by_username("Admin")
+    if existing is not None:
+        return
+    import bcrypt, uuid as _uuid
+    pw_hash = bcrypt.hashpw(b"123456", bcrypt.gensalt()).decode()
+    admin = User(
+        id=str(_uuid.uuid4()),
+        phone_number="",
+        display_name="Admin",
+        created_at=time.time(),
+        username="Admin",
+        password_hash=pw_hash,
+    )
+    await persistence.save_user(admin)
+    print("[Zepo] Admin user seeded (username: Admin, password: 123456)")
+
+
 async def seed_demo_data(persistence: PersistenceAdapter) -> None:
     now = time.time()
 

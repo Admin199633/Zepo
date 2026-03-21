@@ -37,6 +37,7 @@ class AuthToken:
     user_id: str
     token: str
     expires_at: float
+    display_name: str = ""
 
 
 class ClubRole(str, Enum):

@@ -182,6 +182,7 @@ export const useTableStore = create<TableState>((set, get) => {
       }
 
       const potTotal = envelope.payload['pot_total'] as number | undefined;
+      const stackRemaining = envelope.payload['stack_remaining'] as number | undefined;
       const current = get().gameState;
       const updates: Partial<TableState> = {};
 
@@ -198,6 +199,17 @@ export const useTableStore = create<TableState>((set, get) => {
             min_raise: newMinRaise ?? current.current_hand.min_raise,
             ...(potTotal !== undefined ? { live_pot: potTotal } : {}),
           },
+        };
+      }
+
+      // Update acting player's chip count immediately — don't wait for STATE_SNAPSHOT
+      if (current && actingUserId && stackRemaining !== undefined) {
+        const base = (updates.gameState ?? current) as StateSnapshotDTO;
+        updates.gameState = {
+          ...base,
+          players: base.players.map((p) =>
+            p.user_id === actingUserId ? { ...p, stack: stackRemaining } : p
+          ),
         };
       }
 

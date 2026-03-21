@@ -42,7 +42,7 @@ export default function LoginScreen() {
         mode === 'register'
           ? await register(u, p, displayName.trim())
           : await login(u, p);
-      await loginStore(response.token, response.user_id);
+      await loginStore(response.token, response.user_id, response.display_name);
       router.replace('/(app)');
     } catch (err) {
       setError(extractErrorMessage(err));
