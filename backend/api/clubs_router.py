@@ -1,7 +1,8 @@
 """
 POST   /clubs
 GET    /clubs/{club_id}
-POST   /clubs/{club_id}/join
+POST   /clubs/join
+POST   /clubs/{club_id}/join  (legacy)
 """
 from __future__ import annotations
 
@@ -154,6 +155,36 @@ async def get_club(
         invite_code=club.invite_code,
         member_count=len(club.memberships),
     )
+
+
+@router.post("/join", response_model=JoinClubResponse)
+async def join_club_by_invite(
+    body: JoinClubBody,
+    current_user: User = Depends(get_current_user),
+    persistence: PersistenceAdapter = Depends(get_persistence),
+) -> JoinClubResponse:
+    """Join a club using only an invite code (no club_id needed in URL)."""
+    club = await persistence.get_club_by_invite(body.invite_code)
+    if club is None:
+        raise http_error("INVALID_INVITE_CODE", "Invite code is invalid.")
+
+    if club.is_member(current_user.id):
+        raise http_error("ALREADY_MEMBER", "You are already a member of this club.", status=409)
+
+    membership = ClubMembership(
+        club_id=club.id,
+        user_id=current_user.id,
+        role=ClubRole.MEMBER,
+        joined_at=time.time(),
+    )
+    club.memberships.append(membership)
+    await persistence.save_club(club)
+    await persistence.save_membership(membership)
+
+    table = await persistence.get_club_table(club.id)
+    table_id = table.id if table else ""
+
+    return JoinClubResponse(club_id=club.id, table_id=table_id)
 
 
 @router.post("/{club_id}/join", response_model=JoinClubResponse)
