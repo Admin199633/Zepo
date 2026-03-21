@@ -45,7 +45,10 @@
       "Bash(python3 -m pytest tests/test_simulation_scenarios.py::test_s9_phase_community_timer -xvs)",
       "Bash(\"C:\\\\Users\\\\LiorSw\\\\Desktop\\\\Zepo\\\\tests\\\\test_simulation_scenarios.py\")",
       "Bash(\"C:\\\\Users\\\\LiorSw\\\\Desktop\\\\Zepo\\\\tests\\\\test_simulation_scenarios.py\":*)",
-      "Bash(find C:/Users/LiorSw/Desktop/Zepo/mobile -name config.ts -o -name .env* -o -name *.env)"
+      "Bash(find C:/Users/LiorSw/Desktop/Zepo/mobile -name config.ts -o -name .env* -o -name *.env)",
+      "Bash(where python3.exe)",
+      "Read(//c/Users/LiorSw/AppData/Local/Programs/Python/**)",
+      "Bash(ls /c/Python*/python.exe)"
     ]
   }
 }

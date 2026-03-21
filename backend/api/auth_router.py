@@ -1,6 +1,8 @@
 """
-POST /auth/request-otp
-POST /auth/verify-otp
+POST /auth/register
+POST /auth/login
+POST /auth/request-otp   (legacy — used by simulation tests)
+POST /auth/verify-otp    (legacy — used by simulation tests)
 """
 from __future__ import annotations
 
@@ -21,6 +23,17 @@ _E164_RE = re.compile(r"^\+[1-9]\d{6,14}$")
 # ---------------------------------------------------------------------------
 # Request / Response models
 # ---------------------------------------------------------------------------
+
+class RegisterBody(BaseModel):
+    username: str
+    password: str
+    display_name: str
+
+
+class LoginBody(BaseModel):
+    username: str
+    password: str
+
 
 class OtpRequestBody(BaseModel):
     phone_number: str
@@ -53,7 +66,45 @@ class TokenResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Routes
+# Routes — username/password
+# ---------------------------------------------------------------------------
+
+@router.post("/register", response_model=TokenResponse)
+async def register(
+    body: RegisterBody,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> TokenResponse:
+    try:
+        auth_token = await auth_service.register(
+            body.username, body.password, body.display_name
+        )
+    except ValueError as exc:
+        raise http_error("REGISTER_ERROR", str(exc))
+    return TokenResponse(
+        token=auth_token.token,
+        user_id=auth_token.user_id,
+        expires_at=auth_token.expires_at,
+    )
+
+
+@router.post("/login", response_model=TokenResponse)
+async def login(
+    body: LoginBody,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> TokenResponse:
+    try:
+        auth_token = await auth_service.login(body.username, body.password)
+    except ValueError as exc:
+        raise http_error("LOGIN_ERROR", str(exc))
+    return TokenResponse(
+        token=auth_token.token,
+        user_id=auth_token.user_id,
+        expires_at=auth_token.expires_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Routes — legacy OTP (simulation tests)
 # ---------------------------------------------------------------------------
 
 @router.post("/request-otp", status_code=200)
