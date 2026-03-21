@@ -37,11 +37,18 @@ _DEMO_CONFIG = TableConfig(
 
 
 async def seed_admin_user(persistence: PersistenceAdapter) -> None:
-    """Create the built-in Admin user. Idempotent — skips if already present."""
+    """Create the built-in Admin user. Idempotent — skips if already present with valid hash."""
+    import bcrypt, uuid as _uuid
     existing = await persistence.get_user_by_username("Admin")
     if existing is not None:
+        if existing.password_hash:
+            print("[Zepo] Admin user already exists — skipping seed")
+            return
+        # Admin exists but password_hash is empty (old deploy) — fix it
+        existing.password_hash = bcrypt.hashpw(b"123456", bcrypt.gensalt()).decode()
+        await persistence.save_user(existing)
+        print("[Zepo] Admin password_hash was empty — corrected")
         return
-    import bcrypt, uuid as _uuid
     pw_hash = bcrypt.hashpw(b"123456", bcrypt.gensalt()).decode()
     admin = User(
         id=str(_uuid.uuid4()),
