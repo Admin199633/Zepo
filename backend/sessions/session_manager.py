@@ -700,7 +700,10 @@ class TableSessionManager:
         Post-event: schedule turn timer if EvtTurnChanged is present.
         """
         for event in events:
-            self._update_feed_from_event(event)
+            try:
+                self._update_feed_from_event(event)
+            except Exception:
+                pass  # feed updates must never interrupt game dispatch
 
             if isinstance(event, EvtCardsDealt):
                 # Private — only to the named player
@@ -913,25 +916,31 @@ class TableSessionManager:
             community_cards=[str(c) for c in hand.community_cards],
             timestamp=time.time(),
         )
-        await self._persistence.save_hand_summary(summary)
+        try:
+            await self._persistence.save_hand_summary(summary)
+        except Exception as exc:
+            print(f"[WARN] save_hand_summary failed on {self._table_id}: {exc}")
 
-        winner_names = [self._display_name(uid) for uid in winner_ids]
-        self._hand_history_cache.append({
-            "hand_number": self._state.hand_number,
-            "pot_total": summary.pot_total,
-            "winner_ids": winner_ids,
-            "winner_names": winner_names,
-            "player_ids": summary.player_ids,
-            "stacks_before": dict(summary.stacks_before),
-            "stacks_after": dict(summary.stacks_after),
-            "community_cards": [
-                {"rank": c.rank.value, "suit": c.suit.value}
-                for c in (hand.community_cards or [])
-            ],
-            "ts": summary.timestamp,
-        })
-        if len(self._hand_history_cache) > 20:
-            self._hand_history_cache = self._hand_history_cache[-20:]
+        try:
+            winner_names = [self._display_name(uid) for uid in winner_ids]
+            self._hand_history_cache.append({
+                "hand_number": self._state.hand_number,
+                "pot_total": summary.pot_total,
+                "winner_ids": winner_ids,
+                "winner_names": winner_names,
+                "player_ids": summary.player_ids,
+                "stacks_before": dict(summary.stacks_before),
+                "stacks_after": dict(summary.stacks_after),
+                "community_cards": [
+                    {"rank": c.rank.value, "suit": c.suit.value}
+                    for c in (hand.community_cards or [])
+                ],
+                "ts": summary.timestamp,
+            })
+            if len(self._hand_history_cache) > 20:
+                self._hand_history_cache = self._hand_history_cache[-20:]
+        except Exception as exc:
+            print(f"[WARN] hand_history_cache append failed on {self._table_id}: {exc}")
 
         # Persist updated player stacks
         for uid, player in self._state.players.items():
@@ -939,7 +948,7 @@ class TableSessionManager:
 
         await self._emit_analytics(AnalyticsEventType.HAND_END, "system")
 
-        # Schedule next hand
+        # Schedule next hand — must always run even if persistence above failed
         await self._maybe_start_hand_unlocked()
 
     # -----------------------------------------------------------------------

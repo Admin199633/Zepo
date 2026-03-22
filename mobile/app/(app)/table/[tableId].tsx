@@ -138,7 +138,7 @@ export default function TableScreen() {
   const handInProgress = gameState?.current_hand != null;
   const canAct = Boolean(isMyTurn && isPlaying && handInProgress && connectionStatus === 'connected');
   const isSeated = myPlayer !== null && joinedRole === 'player';
-  const canRebuy = isSeated && !handInProgress && connectionStatus === 'connected';
+  const canRebuy = isSeated && connectionStatus === 'connected';
   const maxRebuyAmount = myPlayer ? myPlayer.original_buy_in >> 1 : 0;
   const totalPot = gameState?.current_hand?.live_pot ?? 0;
   const showMyCards = (myPlayer?.hole_cards?.length ?? 0) > 0;
