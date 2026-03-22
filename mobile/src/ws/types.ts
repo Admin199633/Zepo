@@ -152,6 +152,20 @@ export interface BackendHandViewDTO {
   winners: unknown[] | null;
 }
 
+export interface ActionFeedEntry {
+  text: string;
+  ts: number;
+}
+
+export interface HandHistoryEntry {
+  hand_number: number;
+  pot_total: number;
+  winner_ids: string[];
+  winner_names: string[];
+  player_ids: string[];
+  ts: number;
+}
+
 export interface BackendStateSnapshotDTO {
   table_id: string;
   club_id: string;
@@ -161,6 +175,8 @@ export interface BackendStateSnapshotDTO {
   seat_map: Record<string, string>; // "seat_index" → user_id
   config: Record<string, unknown>;
   hand: BackendHandViewDTO | null;
+  action_feed: ActionFeedEntry[];
+  hand_history: HandHistoryEntry[];
 }
 
 // ---------------------------------------------------------------------------

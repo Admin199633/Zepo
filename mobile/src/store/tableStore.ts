@@ -3,10 +3,12 @@ import { create } from 'zustand';
 import { SocketClient } from '../ws/SocketClient';
 import { TableLogger } from '../utils/logger';
 import type {
+  ActionFeedEntry,
   BackendStateSnapshotDTO,
   ChatMessageDTO,
   ConnectionStatus,
   HandEndedPayload,
+  HandHistoryEntry,
   HandViewDTO,
   PlayerViewDTO,
   StateSnapshotDTO,
@@ -23,6 +25,8 @@ interface TableState {
   // Key: user_id, Value: formatted label e.g. "Fold", "Check", "Call 5", "Raise 20", "All-in"
   lastActions: Record<string, string>;
   chatMessages: ChatMessageDTO[];
+  actionFeed: ActionFeedEntry[];
+  handHistory: HandHistoryEntry[];
 
   connect: (tableId: string, token: string) => void;
   disconnect: () => void;
@@ -133,7 +137,13 @@ export const useTableStore = create<TableState>((set, get) => {
         your_user_id: yourUserId,
       };
       TableLogger.log('STATE_SNAPSHOT', { hand: snap.current_hand?.hand_number ?? null });
-      set({ gameState: snap, joinPending: false, error: null });
+      set({
+        gameState: snap,
+        joinPending: false,
+        error: null,
+        actionFeed: raw.action_feed ?? [],
+        handHistory: raw.hand_history ?? [],
+      });
     } else if (envelope.type === 'HAND_RESULT') {
       const raw = envelope.payload as {
         hand_id?: string;
@@ -370,6 +380,8 @@ export const useTableStore = create<TableState>((set, get) => {
     error: null,
     lastActions: {},
     chatMessages: [],
+    actionFeed: [],
+    handHistory: [],
 
     connect: (tableId, token) => {
       TableLogger.log('connect', { tableId });
@@ -383,7 +395,7 @@ export const useTableStore = create<TableState>((set, get) => {
       savedTableId = null;
       savedToken = null;
       socketClient.disconnect();
-      set({ gameState: null, handResult: null, joinPending: false, lastActions: {}, chatMessages: [] });
+      set({ gameState: null, handResult: null, joinPending: false, lastActions: {}, chatMessages: [], actionFeed: [], handHistory: [] });
     },
 
     sendJoin: (role) => {
@@ -440,6 +452,8 @@ export const useTableStore = create<TableState>((set, get) => {
         error: null,
         lastActions: {},
         chatMessages: [],
+        actionFeed: [],
+        handHistory: [],
       });
     },
   };

@@ -43,6 +43,8 @@ export default function TableScreen() {
     sendRebuy,
     sendChat,
     chatMessages,
+    actionFeed,
+    handHistory,
     connect,
     disconnect,
     clearHandResult,
@@ -58,6 +60,7 @@ export default function TableScreen() {
   const [rebuyInput, setRebuyInput] = useState('');
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
   const prevStatusRef = useRef<ConnectionStatus>('disconnected');
 
   // Connect when screen is focused, disconnect when it loses focus.
@@ -141,6 +144,13 @@ export default function TableScreen() {
   const showMyCards = (myPlayer?.hole_cards?.length ?? 0) > 0;
   const scrollPaddingBottom = canAct ? ACTION_BAR_HEIGHT + insets.bottom + 16 : 16;
 
+  // Session stats for Report modal — computed from hand history
+  const playerSessionStats = (gameState?.players ?? []).map((p) => {
+    const played = handHistory.filter((h) => h.player_ids.includes(p.user_id)).length;
+    const won = handHistory.filter((h) => h.winner_ids.includes(p.user_id)).length;
+    return { ...p, handsPlayed: played, handsWon: won };
+  });
+
   return (
     <View style={styles.container}>
       {/* Reconnected flash banner */}
@@ -162,6 +172,11 @@ export default function TableScreen() {
         <Text style={styles.tableId} numberOfLines={1}>
           Table {tableId}
         </Text>
+        {joined && (
+          <TouchableOpacity style={styles.reportBtn} onPress={() => setReportOpen(true)}>
+            <Text style={styles.reportBtnText}>Report</Text>
+          </TouchableOpacity>
+        )}
         {myStatus && <RoleBadge status={myStatus} />}
       </View>
 
@@ -351,6 +366,66 @@ export default function TableScreen() {
         </View>
       </Modal>
 
+      {/* Report modal */}
+      <Modal visible={reportOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, styles.reportCard]}>
+            <View style={styles.reportHeader}>
+              <Text style={styles.modalTitle}>Table Report</Text>
+              <TouchableOpacity onPress={() => setReportOpen(false)}>
+                <Text style={styles.reportClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.reportScroll} showsVerticalScrollIndicator={false}>
+              {/* Player stats */}
+              <Text style={styles.reportSection}>Players</Text>
+              {playerSessionStats.map((p) => (
+                <View key={p.user_id} style={styles.reportRow}>
+                  <Text style={styles.reportName} numberOfLines={1}>{p.display_name}</Text>
+                  <Text style={styles.reportStat}>{p.stack} chips</Text>
+                  {handHistory.length > 0 && (
+                    <Text style={styles.reportStat}>{p.handsWon}/{p.handsPlayed}</Text>
+                  )}
+                </View>
+              ))}
+
+              {/* Current pot breakdown */}
+              {gameState?.current_hand && (
+                <>
+                  <Text style={styles.reportSection}>Current Pot</Text>
+                  <Text style={styles.reportPot}>Total: {gameState.current_hand.live_pot}</Text>
+                </>
+              )}
+
+              {/* Hand history */}
+              {handHistory.length > 0 && (
+                <>
+                  <Text style={styles.reportSection}>Recent Hands</Text>
+                  {[...handHistory].reverse().slice(0, 5).map((h) => (
+                    <View key={h.hand_number} style={styles.reportHistoryRow}>
+                      <Text style={styles.reportHistoryNum}>#{h.hand_number}</Text>
+                      <Text style={styles.reportHistoryDetail}>
+                        Pot {h.pot_total} — {h.winner_names.join(', ')}
+                      </Text>
+                    </View>
+                  ))}
+                </>
+              )}
+
+              {/* Action feed */}
+              {actionFeed.length > 0 && (
+                <>
+                  <Text style={styles.reportSection}>Recent Actions</Text>
+                  {[...actionFeed].reverse().map((entry, i) => (
+                    <Text key={i} style={styles.reportFeedEntry}>{entry.text}</Text>
+                  ))}
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Role selection modal */}
       <Modal visible={roleModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -460,4 +535,21 @@ const styles = StyleSheet.create({
   modalButtonSecondary: { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#334155' },
   modalButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   modalButtonTextSecondary: { color: '#94A3B8' },
+  // Report button
+  reportBtn: { backgroundColor: '#1E293B', borderRadius: 8, paddingVertical: 5, paddingHorizontal: 12, marginRight: 8 },
+  reportBtnText: { color: '#94A3B8', fontSize: 12, fontWeight: '600' },
+  // Report modal
+  reportCard: { width: '92%', maxHeight: '80%', padding: 20 },
+  reportHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  reportClose: { color: '#64748B', fontSize: 20, paddingLeft: 16 },
+  reportScroll: { flexGrow: 0 },
+  reportSection: { color: '#64748B', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginTop: 16, marginBottom: 6 },
+  reportRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#1E293B', gap: 8 },
+  reportName: { flex: 1, color: '#F8FAFC', fontSize: 14 },
+  reportStat: { color: '#94A3B8', fontSize: 13, minWidth: 60, textAlign: 'right' },
+  reportPot: { color: '#F8FAFC', fontSize: 15, fontWeight: '600', paddingVertical: 4 },
+  reportHistoryRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, gap: 8 },
+  reportHistoryNum: { color: '#64748B', fontSize: 12, minWidth: 36 },
+  reportHistoryDetail: { color: '#CBD5E1', fontSize: 13, flex: 1 },
+  reportFeedEntry: { color: '#94A3B8', fontSize: 13, paddingVertical: 3, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
 });

@@ -118,6 +118,10 @@ class TableSessionManager:
         # Idempotency: track recently processed request_ids
         self._seen_request_ids: dict[str, float] = {}  # req_id → processed_at
 
+        # Action feed and hand history (in-memory, bounded, resets on server restart)
+        self._action_feed: list[dict] = []
+        self._hand_history_cache: list[dict] = []
+
     # -----------------------------------------------------------------------
     # Properties
     # -----------------------------------------------------------------------
@@ -205,6 +209,8 @@ class TableSessionManager:
                     role="player",
                 ),
             )
+
+            self._feed_append(f"{display_name} joined the table")
 
             # Send full state snapshot to the new player
             snapshot = self._build_player_snapshot(user_id)
@@ -555,6 +561,8 @@ class TableSessionManager:
             else:
                 player.status = PlayerStatus.FOLDED
 
+        self._feed_append(f"{player.display_name} left the table")
+
         seat = player.seat_index
         del self._state.players[user_id]
         self._state.seat_map.pop(seat, None)
@@ -692,6 +700,7 @@ class TableSessionManager:
         Post-event: schedule turn timer if EvtTurnChanged is present.
         """
         for event in events:
+            self._update_feed_from_event(event)
 
             if isinstance(event, EvtCardsDealt):
                 # Private — only to the named player
@@ -906,6 +915,18 @@ class TableSessionManager:
         )
         await self._persistence.save_hand_summary(summary)
 
+        winner_names = [self._display_name(uid) for uid in winner_ids]
+        self._hand_history_cache.append({
+            "hand_number": self._state.hand_number,
+            "pot_total": summary.pot_total,
+            "winner_ids": winner_ids,
+            "winner_names": winner_names,
+            "player_ids": summary.player_ids,
+            "ts": summary.timestamp,
+        })
+        if len(self._hand_history_cache) > 20:
+            self._hand_history_cache = self._hand_history_cache[-20:]
+
         # Persist updated player stacks
         for uid, player in self._state.players.items():
             await self._persistence.save_player_session(self._table_id, player)
@@ -1015,10 +1036,68 @@ class TableSessionManager:
         await self._broadcaster.send_to_player(self._table_id, user_id, env)
 
     def _build_player_snapshot(self, user_id: str) -> dict:
-        return build_player_view(self._state, user_id)
+        snap = build_player_view(self._state, user_id)
+        snap['action_feed'] = list(self._action_feed)
+        snap['hand_history'] = list(self._hand_history_cache)
+        return snap
 
     def _build_spectator_snapshot(self) -> dict:
-        return build_spectator_view(self._state)
+        snap = build_spectator_view(self._state)
+        snap['action_feed'] = list(self._action_feed)
+        snap['hand_history'] = list(self._hand_history_cache)
+        return snap
+
+    # -----------------------------------------------------------------------
+    # Internal: Action feed
+    # -----------------------------------------------------------------------
+
+    def _display_name(self, user_id: str) -> str:
+        p = self._state.players.get(user_id)
+        return p.display_name if p else user_id[:8]
+
+    def _feed_append(self, text: str) -> None:
+        self._action_feed.append({"text": text, "ts": time.time()})
+        if len(self._action_feed) > 20:
+            self._action_feed = self._action_feed[-20:]
+
+    def _update_feed_from_event(self, event: EngineEvent) -> None:
+        if isinstance(event, EvtPhaseChanged):
+            labels: dict[HandPhase, str] = {
+                HandPhase.PRE_FLOP: f"Hand #{self._state.hand_number} started",
+                HandPhase.FLOP: "— Flop —",
+                HandPhase.TURN: "— Turn —",
+                HandPhase.RIVER: "— River —",
+                HandPhase.SHOWDOWN: "— Showdown —",
+            }
+            label = labels.get(event.phase)
+            if label:
+                self._feed_append(label)
+        elif isinstance(event, EvtPlayerActed):
+            name = self._display_name(event.user_id)
+            verbs: dict[str, str] = {
+                "fold": "folded",
+                "check": "checked",
+                "call": f"called {event.amount}",
+                "raise": f"raised to {event.amount}",
+                "all_in": "all-in",
+            }
+            verb = verbs.get(event.action_type.value, event.action_type.value)
+            self._feed_append(f"{name} {verb}")
+        elif isinstance(event, EvtBlindsPosted):
+            sb = self._display_name(event.small_blind_user_id)
+            bb = self._display_name(event.big_blind_user_id)
+            self._feed_append(
+                f"Blinds: {sb} {event.small_blind_amount} / {bb} {event.big_blind_amount}"
+            )
+        elif isinstance(event, EvtHandResult):
+            winners = ", ".join(
+                f"{self._display_name(uid)} +{amt}" for uid, amt in event.winnings.items()
+            )
+            self._feed_append(f"Hand #{self._state.hand_number}: {winners}")
+        elif isinstance(event, EvtBonusAwarded):
+            self._feed_append(
+                f"Bonus: {self._display_name(event.to_user_id)} +{event.amount}"
+            )
 
     # -----------------------------------------------------------------------
     # Internal: Idempotency
