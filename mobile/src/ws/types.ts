@@ -55,6 +55,8 @@ export interface PlayerViewDTO {
   hole_cards: CardDTO[] | null;
   current_bet: number;
   reserve_until: number | null;
+  original_buy_in: number;
+  rebuy_count: number;
 }
 
 export interface PotDTO {
@@ -94,7 +96,17 @@ export type ClientMessageType =
   | 'ACTION'
   | 'SIT_OUT'
   | 'SIT_IN'
-  | 'SYNC_REQUEST';
+  | 'SYNC_REQUEST'
+  | 'REBUY'
+  | 'CHAT';
+
+export interface ChatMessageDTO {
+  message_id: string;
+  user_id: string;
+  display_name: string;
+  message: string;
+  ts: number;
+}
 
 export interface ClientEnvelope {
   type: ClientMessageType;
@@ -114,6 +126,8 @@ export interface BackendPlayerViewDTO {
   stack: number;
   status: string;
   is_connected: boolean;
+  original_buy_in: number;
+  rebuy_count: number;
 }
 
 export interface BackendBettingStateDTO {

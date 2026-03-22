@@ -48,7 +48,8 @@
       "Bash(find C:/Users/LiorSw/Desktop/Zepo/mobile -name config.ts -o -name .env* -o -name *.env)",
       "Bash(where python3.exe)",
       "Read(//c/Users/LiorSw/AppData/Local/Programs/Python/**)",
-      "Bash(ls /c/Python*/python.exe)"
+      "Bash(ls /c/Python*/python.exe)",
+      "Bash(grep:*)"
     ]
   }
 }

@@ -33,6 +33,13 @@ export default function PlayerList({ players, myUserId, currentActorId, lastActi
                     <Text style={styles.dealerText}>D</Text>
                   </View>
                 )}
+                {p.rebuy_count > 0 && (
+                  <View style={styles.rebuyBadge}>
+                    <Text style={styles.rebuyText}>
+                      {p.rebuy_count === 1 ? 'rebuy' : `rebuy +${p.rebuy_count - 1}`}
+                    </Text>
+                  </View>
+                )}
                 {lastAction && (
                   <View style={[styles.actionBadge, actionBadgeStyle(lastAction)]}>
                     <Text style={styles.actionText}>{lastAction}</Text>
@@ -106,6 +113,15 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   dealerText: { color: '#FEF3C7', fontWeight: '700', fontSize: 11 },
+  rebuyBadge: {
+    backgroundColor: '#1E3A5F',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  rebuyText: { color: '#93C5FD', fontWeight: '600', fontSize: 11 },
   actionBadge: {
     borderRadius: 4,
     paddingHorizontal: 6,

@@ -5,6 +5,7 @@ import type {
   CreateClubResponse,
   JoinClubBody,
   JoinClubResponse,
+  TableConfigInput,
 } from './types';
 
 export async function getClub(clubId: string): Promise<ClubDTO> {
@@ -17,10 +18,10 @@ export async function getUserClubs(): Promise<ClubDTO[]> {
   return data;
 }
 
-export async function createClub(name: string): Promise<CreateClubResponse> {
-  const { data } = await apiClient.post<CreateClubResponse>('/clubs', {
-    name,
-  } satisfies CreateClubBody);
+export async function createClub(name: string, tableConfig?: TableConfigInput): Promise<CreateClubResponse> {
+  const body: CreateClubBody = { name };
+  if (tableConfig) body.table_config = tableConfig;
+  const { data } = await apiClient.post<CreateClubResponse>('/clubs', body);
   return data;
 }
 

@@ -60,6 +60,8 @@ def _build_view(
             "stack": p.stack,
             "status": p.status.value,
             "is_connected": p.is_connected,
+            "original_buy_in": p.original_buy_in,
+            "rebuy_count": p.rebuy_count,
         }
 
     hand_view: dict | None = None
@@ -128,6 +130,7 @@ def _build_view(
             "turn_timer_seconds": state.config.turn_timer_seconds,
             "max_players": state.config.max_players,
             "house_rules": state.config.house_rules,
+            "rule_params": state.config.rule_params,
         },
         "hand": hand_view,
     }

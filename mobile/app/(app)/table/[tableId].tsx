@@ -2,10 +2,13 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
+  Keyboard,
   Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -37,6 +40,9 @@ export default function TableScreen() {
     sendJoin,
     sendSyncRequest,
     sendAction,
+    sendRebuy,
+    sendChat,
+    chatMessages,
     connect,
     disconnect,
     clearHandResult,
@@ -48,6 +54,10 @@ export default function TableScreen() {
   const [joinedRole, setJoinedRole] = useState<'player' | 'watcher' | null>(null);
   const [showReconnectedBanner, setShowReconnectedBanner] = useState(false);
   const [secsLeft, setSecsLeft] = useState<number | null>(null);
+  const [rebuyModalVisible, setRebuyModalVisible] = useState(false);
+  const [rebuyInput, setRebuyInput] = useState('');
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
   const prevStatusRef = useRef<ConnectionStatus>('disconnected');
 
   // Connect when screen is focused, disconnect when it loses focus.
@@ -124,6 +134,9 @@ export default function TableScreen() {
   const isPlaying = myStatus === 'active' || myStatus === 'all_in';
   const handInProgress = gameState?.current_hand != null;
   const canAct = Boolean(isMyTurn && isPlaying && handInProgress && connectionStatus === 'connected');
+  const isSeated = myPlayer !== null && joinedRole === 'player';
+  const canRebuy = isSeated && !handInProgress && connectionStatus === 'connected';
+  const maxRebuyAmount = myPlayer ? myPlayer.original_buy_in >> 1 : 0;
   const totalPot = gameState?.current_hand?.live_pot ?? 0;
   const showMyCards = (myPlayer?.hole_cards?.length ?? 0) > 0;
   const scrollPaddingBottom = canAct ? ACTION_BAR_HEIGHT + insets.bottom + 16 : 16;
@@ -159,6 +172,16 @@ export default function TableScreen() {
           onPress={() => useTableStore.getState().sendSitIn()}
         >
           <Text style={styles.sitInText}>You are sitting out — Tap to rejoin</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Rebuy button — between hands only */}
+      {canRebuy && (
+        <TouchableOpacity
+          style={styles.rebuyBanner}
+          onPress={() => { setRebuyInput(String(maxRebuyAmount)); setRebuyModalVisible(true); }}
+        >
+          <Text style={styles.rebuyBannerText}>Rebuy (max {maxRebuyAmount})</Text>
         </TouchableOpacity>
       )}
 
@@ -241,6 +264,93 @@ export default function TableScreen() {
         />
       )}
 
+      {/* Chat panel */}
+      {joined && (
+        <View style={styles.chatContainer}>
+          <TouchableOpacity style={styles.chatToggle} onPress={() => setChatOpen((o) => !o)}>
+            <Text style={styles.chatToggleText}>
+              {chatOpen ? '▼ Chat' : `▲ Chat${chatMessages.length > 0 ? ` (${chatMessages.length})` : ''}`}
+            </Text>
+          </TouchableOpacity>
+          {chatOpen && (
+            <>
+              <FlatList
+                data={chatMessages}
+                keyExtractor={(m) => m.message_id}
+                style={styles.chatList}
+                contentContainerStyle={{ padding: 8 }}
+                renderItem={({ item }) => (
+                  <View style={styles.chatRow}>
+                    <Text style={styles.chatName}>{item.display_name}: </Text>
+                    <Text style={styles.chatMsg}>{item.message}</Text>
+                  </View>
+                )}
+                inverted={false}
+              />
+              <View style={styles.chatInputRow}>
+                <TextInput
+                  style={styles.chatInput}
+                  placeholder="Message…"
+                  placeholderTextColor="#64748B"
+                  value={chatInput}
+                  onChangeText={setChatInput}
+                  maxLength={500}
+                  returnKeyType="send"
+                  onSubmitEditing={() => {
+                    sendChat(chatInput);
+                    setChatInput('');
+                    Keyboard.dismiss();
+                  }}
+                />
+                <TouchableOpacity
+                  style={styles.chatSendBtn}
+                  onPress={() => { sendChat(chatInput); setChatInput(''); Keyboard.dismiss(); }}
+                >
+                  <Text style={styles.chatSendText}>Send</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
+      )}
+
+      {/* Rebuy modal */}
+      <Modal visible={rebuyModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Rebuy</Text>
+            <Text style={[styles.muted, { marginBottom: 12, textAlign: 'center' }]}>
+              Max {maxRebuyAmount} chips
+            </Text>
+            <TextInput
+              style={styles.rebuyInput}
+              keyboardType="number-pad"
+              value={rebuyInput}
+              onChangeText={setRebuyInput}
+              maxLength={8}
+            />
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => {
+                const amount = parseInt(rebuyInput, 10);
+                if (!isNaN(amount) && amount > 0 && amount <= maxRebuyAmount) {
+                  sendRebuy(amount);
+                }
+                setRebuyModalVisible(false);
+              }}
+            >
+              <Text style={styles.modalButtonText}>Confirm</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalButtonSecondary]}
+              onPress={() => setRebuyModalVisible(false)}
+            >
+              <Text style={[styles.modalButtonText, styles.modalButtonTextSecondary]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Role selection modal */}
       <Modal visible={roleModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -281,6 +391,31 @@ const styles = StyleSheet.create({
   tableId: { color: '#94A3B8', fontSize: 13, flex: 1 },
   sitInBanner: { backgroundColor: '#7C3AED', paddingVertical: 10, paddingHorizontal: 16 },
   sitInText: { color: '#fff', fontWeight: '600', textAlign: 'center' },
+  rebuyBanner: { backgroundColor: '#1E3A5F', paddingVertical: 10, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#3B82F6' },
+  rebuyBannerText: { color: '#93C5FD', fontWeight: '600', textAlign: 'center' },
+  rebuyInput: {
+    backgroundColor: '#0F172A',
+    color: '#F8FAFC',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 18,
+    width: '100%',
+    marginBottom: 12,
+    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  chatContainer: { borderTopWidth: 1, borderTopColor: '#1E293B', backgroundColor: '#0F172A' },
+  chatToggle: { paddingHorizontal: 16, paddingVertical: 8 },
+  chatToggleText: { color: '#64748B', fontSize: 13, fontWeight: '600' },
+  chatList: { maxHeight: 140 },
+  chatRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 4 },
+  chatName: { color: '#94A3B8', fontSize: 12, fontWeight: '700' },
+  chatMsg: { color: '#CBD5E1', fontSize: 12, flexShrink: 1 },
+  chatInputRow: { flexDirection: 'row', padding: 8, gap: 8 },
+  chatInput: { flex: 1, backgroundColor: '#1E293B', color: '#F8FAFC', borderRadius: 8, padding: 10, fontSize: 14 },
+  chatSendBtn: { backgroundColor: '#2563EB', borderRadius: 8, paddingHorizontal: 14, justifyContent: 'center' },
+  chatSendText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   scroll: { flex: 1 },
   scrollContent: { padding: 16 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },

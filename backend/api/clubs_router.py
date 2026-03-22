@@ -21,22 +21,28 @@ from poker_engine.engine.models import TableConfig
 
 router = APIRouter(prefix="/clubs", tags=["clubs"])
 
-_DEFAULT_CONFIG = TableConfig(
-    max_players=9,
-    starting_stack=1000,
-    small_blind=5,
-    big_blind=10,
-    turn_timer_seconds=30,
-    house_rules=[],
-)
-
 
 # ---------------------------------------------------------------------------
 # Request / Response models
 # ---------------------------------------------------------------------------
 
+class HouseRuleConfig(BaseModel):
+    rule_id: str
+    params: dict = {}
+
+
+class TableConfigInput(BaseModel):
+    starting_stack: int = 1000
+    small_blind: int = 5
+    big_blind: int = 10
+    turn_timer_seconds: int = 30
+    max_players: int = 9
+    house_rules: list[HouseRuleConfig] = []
+
+
 class CreateClubBody(BaseModel):
     name: str
+    table_config: TableConfigInput = TableConfigInput()
 
     @field_validator("name")
     @classmethod
@@ -80,6 +86,25 @@ async def create_club(
     current_user: User = Depends(get_current_user),
     persistence: PersistenceAdapter = Depends(get_persistence),
 ) -> CreateClubResponse:
+    if current_user.username != "Admin":
+        raise http_error("FORBIDDEN", "Only Admin can create clubs.", status=403)
+
+    tc = body.table_config
+    rule_ids = [r.rule_id for r in tc.house_rules]
+    rule_params = {r.rule_id: r.params for r in tc.house_rules if r.params}
+    try:
+        table_config = TableConfig(
+            starting_stack=tc.starting_stack,
+            small_blind=tc.small_blind,
+            big_blind=tc.big_blind,
+            turn_timer_seconds=tc.turn_timer_seconds,
+            max_players=tc.max_players,
+            house_rules=rule_ids,
+            rule_params=rule_params,
+        )
+    except AssertionError as e:
+        raise http_error("INVALID_CONFIG", str(e))
+
     club_id = str(uuid.uuid4())
     table_id = str(uuid.uuid4())
     invite_code = uuid.uuid4().hex[:8].upper()
@@ -103,7 +128,7 @@ async def create_club(
     table = TableRecord(
         id=table_id,
         club_id=club_id,
-        config=_DEFAULT_CONFIG,
+        config=table_config,
         created_by=current_user.id,
         created_at=now,
         is_active=True,

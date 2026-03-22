@@ -33,6 +33,7 @@ from ..realtime.schemas import (
     ClientMessageType,
     ErrorPayload,
     JoinTablePayload,
+    RebuyPayload,
     ServerEnvelope,
     ServerEventType,
 )
@@ -212,6 +213,10 @@ async def _dispatch_message(
 
             case ClientMessageType.SIT_IN:
                 await session_manager.sit_in(user_id)
+
+            case ClientMessageType.REBUY:
+                payload = RebuyPayload.model_validate(envelope.payload)
+                await session_manager.rebuy(user_id, payload.amount)
 
             case ClientMessageType.LEAVE_TABLE:
                 await session_manager.leave(user_id)

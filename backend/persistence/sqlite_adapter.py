@@ -102,15 +102,17 @@ game_snapshots_table = sa.Table(
 
 player_sessions_table = sa.Table(
     "player_sessions", metadata,
-    sa.Column("table_id",      sa.String,  primary_key=True),
-    sa.Column("user_id",       sa.String,  primary_key=True),
-    sa.Column("display_name",  sa.String,  nullable=False),
-    sa.Column("seat_index",    sa.Integer, nullable=False),
-    sa.Column("stack",         sa.Integer, nullable=False),
-    sa.Column("status",        sa.String,  nullable=False),   # PlayerStatus.value
-    sa.Column("timeout_count", sa.Integer, nullable=False, default=0),
-    sa.Column("is_connected",  sa.Boolean, nullable=False),
-    sa.Column("disconnect_at", sa.Float,   nullable=True),
+    sa.Column("table_id",        sa.String,  primary_key=True),
+    sa.Column("user_id",         sa.String,  primary_key=True),
+    sa.Column("display_name",    sa.String,  nullable=False),
+    sa.Column("seat_index",      sa.Integer, nullable=False),
+    sa.Column("stack",           sa.Integer, nullable=False),
+    sa.Column("status",          sa.String,  nullable=False),   # PlayerStatus.value
+    sa.Column("timeout_count",   sa.Integer, nullable=False, server_default="0"),
+    sa.Column("is_connected",    sa.Boolean, nullable=False),
+    sa.Column("disconnect_at",   sa.Float,   nullable=True),
+    sa.Column("original_buy_in", sa.Integer, nullable=False, server_default="0"),
+    sa.Column("rebuy_count",     sa.Integer, nullable=False, server_default="0"),
 )
 
 player_stats_table = sa.Table(
@@ -178,6 +180,18 @@ class SqlitePersistenceAdapter(PersistenceAdapter):
                     "FROM _users_old"
                 ))
                 await conn.execute(sa.text("DROP TABLE _users_old"))
+
+            # Migrate player_sessions: add rebuy columns if missing
+            ps_res = await conn.execute(sa.text("PRAGMA table_info(player_sessions)"))
+            ps_cols = {row[1] for row in ps_res.fetchall()}
+            if ps_cols and "original_buy_in" not in ps_cols:
+                await conn.execute(sa.text(
+                    "ALTER TABLE player_sessions ADD COLUMN original_buy_in INTEGER NOT NULL DEFAULT 0"
+                ))
+            if ps_cols and "rebuy_count" not in ps_cols:
+                await conn.execute(sa.text(
+                    "ALTER TABLE player_sessions ADD COLUMN rebuy_count INTEGER NOT NULL DEFAULT 0"
+                ))
 
             # Partial unique indexes (idempotent — replace old blanket unique index)
             await conn.execute(sa.text(
@@ -341,6 +355,9 @@ class SqlitePersistenceAdapter(PersistenceAdapter):
             "small_blind": table.config.small_blind,
             "big_blind": table.config.big_blind,
             "turn_timer_seconds": table.config.turn_timer_seconds,
+            "max_players": table.config.max_players,
+            "house_rules": list(table.config.house_rules),
+            "rule_params": dict(table.config.rule_params),
         })
         async with self._engine.begin() as conn:
             await conn.execute(
@@ -483,6 +500,8 @@ class SqlitePersistenceAdapter(PersistenceAdapter):
                     timeout_count=session.timeout_count,
                     is_connected=session.is_connected,
                     disconnect_at=session.disconnect_at,
+                    original_buy_in=session.original_buy_in,
+                    rebuy_count=session.rebuy_count,
                 )
             )
 
@@ -505,6 +524,8 @@ class SqlitePersistenceAdapter(PersistenceAdapter):
                 timeout_count=r.timeout_count,
                 is_connected=r.is_connected,
                 disconnect_at=r.disconnect_at,
+                original_buy_in=r.original_buy_in,
+                rebuy_count=r.rebuy_count,
             )
             for r in rows
         ]

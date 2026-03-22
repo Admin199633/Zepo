@@ -102,6 +102,7 @@ class TableConfig:
     turn_timer_seconds: int
     max_players: int = 10
     house_rules: list[str] = field(default_factory=list)
+    rule_params: dict = field(default_factory=dict)  # rule_id → {param: value}
 
     def __post_init__(self) -> None:
         assert self.big_blind == self.small_blind * 2, "BB must be 2x SB"
@@ -174,6 +175,8 @@ class PlayerSession:
     timeout_count: int = 0
     is_connected: bool = True
     disconnect_at: Optional[float] = None       # epoch when disconnected
+    original_buy_in: int = 0                    # stack at first seat (rebuy cap basis)
+    rebuy_count: int = 0                        # number of rebuys performed
 
 
 # ---------------------------------------------------------------------------

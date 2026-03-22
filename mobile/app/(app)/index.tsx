@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import {
   FlatList,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -27,6 +28,15 @@ export default function ClubsListScreen() {
   const [creating, setCreating] = useState(false);
   const [createResult, setCreateResult] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+  // Table config state
+  const [cfgStack, setCfgStack] = useState('1000');
+  const [cfgSB, setCfgSB] = useState('5');
+  const [cfgBB, setCfgBB] = useState('10');
+  const [cfgTimer, setCfgTimer] = useState('30');
+  const [cfgMaxPlayers, setCfgMaxPlayers] = useState('9');
+  const [cfgBonus27, setCfgBonus27] = useState(false);
+  const [cfgBonus27Amount, setCfgBonus27Amount] = useState('50');
+  const [cfgStraddle, setCfgStraddle] = useState(false);
 
   const loadClubs = () => {
     setLoading(true);
@@ -45,7 +55,18 @@ export default function ClubsListScreen() {
     setCreateError(null);
     setCreateResult(null);
     try {
-      const res = await createClub(name);
+      const houseRules = [];
+      if (cfgBonus27) houseRules.push({ rule_id: 'bonus_27', params: { bonus_amount: parseInt(cfgBonus27Amount, 10) || 50 } });
+      if (cfgStraddle) houseRules.push({ rule_id: 'straddle' });
+      const tableConfig = {
+        starting_stack: parseInt(cfgStack, 10) || 1000,
+        small_blind: parseInt(cfgSB, 10) || 5,
+        big_blind: parseInt(cfgBB, 10) || 10,
+        turn_timer_seconds: parseInt(cfgTimer, 10) || 30,
+        max_players: parseInt(cfgMaxPlayers, 10) || 9,
+        house_rules: houseRules,
+      };
+      const res = await createClub(name, tableConfig);
       setClubName('');
       setCreateResult(`Created! Invite code: ${res.invite_code}`);
       loadClubs();
@@ -119,23 +140,51 @@ export default function ClubsListScreen() {
       {isAdmin && (
         <View style={styles.adminSection}>
           <Text style={styles.adminLabel}>Create Club</Text>
-          <View style={styles.joinRow}>
-            <TextInput
-              style={styles.joinInput}
-              placeholder="Club name"
-              placeholderTextColor="#64748B"
-              value={clubName}
-              onChangeText={setClubName}
-              editable={!creating}
-            />
-            <TouchableOpacity
-              style={[styles.joinButton, styles.createButton, creating && styles.joinButtonDisabled]}
-              onPress={handleCreate}
-              disabled={creating}
-            >
-              <Text style={styles.joinButtonText}>{creating ? '…' : 'Create'}</Text>
-            </TouchableOpacity>
+          <TextInput style={styles.joinInput} placeholder="Club name" placeholderTextColor="#64748B" value={clubName} onChangeText={setClubName} editable={!creating} />
+
+          <Text style={styles.cfgLabel}>Table Config</Text>
+          <View style={styles.cfgRow}>
+            <Text style={styles.cfgKey}>Starting stack</Text>
+            <TextInput style={styles.cfgInput} keyboardType="number-pad" value={cfgStack} onChangeText={setCfgStack} editable={!creating} />
           </View>
+          <View style={styles.cfgRow}>
+            <Text style={styles.cfgKey}>Small blind</Text>
+            <TextInput style={styles.cfgInput} keyboardType="number-pad" value={cfgSB} onChangeText={setCfgSB} editable={!creating} />
+          </View>
+          <View style={styles.cfgRow}>
+            <Text style={styles.cfgKey}>Big blind</Text>
+            <TextInput style={styles.cfgInput} keyboardType="number-pad" value={cfgBB} onChangeText={setCfgBB} editable={!creating} />
+          </View>
+          <View style={styles.cfgRow}>
+            <Text style={styles.cfgKey}>Turn timer (s)</Text>
+            <TextInput style={styles.cfgInput} keyboardType="number-pad" value={cfgTimer} onChangeText={setCfgTimer} editable={!creating} />
+          </View>
+          <View style={styles.cfgRow}>
+            <Text style={styles.cfgKey}>Max players</Text>
+            <TextInput style={styles.cfgInput} keyboardType="number-pad" value={cfgMaxPlayers} onChangeText={setCfgMaxPlayers} editable={!creating} />
+          </View>
+          <View style={styles.cfgRow}>
+            <Text style={styles.cfgKey}>Straddle rule</Text>
+            <Switch value={cfgStraddle} onValueChange={setCfgStraddle} disabled={creating} />
+          </View>
+          <View style={styles.cfgRow}>
+            <Text style={styles.cfgKey}>2-7 bonus rule</Text>
+            <Switch value={cfgBonus27} onValueChange={setCfgBonus27} disabled={creating} />
+          </View>
+          {cfgBonus27 && (
+            <View style={styles.cfgRow}>
+              <Text style={styles.cfgKey}>  Bonus amount</Text>
+              <TextInput style={styles.cfgInput} keyboardType="number-pad" value={cfgBonus27Amount} onChangeText={setCfgBonus27Amount} editable={!creating} />
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={[styles.joinButton, styles.createButton, creating && styles.joinButtonDisabled, { margin: 16, marginTop: 8 }]}
+            onPress={handleCreate}
+            disabled={creating}
+          >
+            <Text style={styles.joinButtonText}>{creating ? '…' : 'Create Club'}</Text>
+          </TouchableOpacity>
           {createResult ? <Text style={styles.createSuccess}>{createResult}</Text> : null}
           {createError ? <Text style={styles.joinError}>{createError}</Text> : null}
         </View>
@@ -224,6 +273,10 @@ const styles = StyleSheet.create({
   joinError: { color: '#F87171', fontSize: 13, paddingHorizontal: 16, paddingBottom: 12 },
   adminSection: { borderTopWidth: 1, borderTopColor: '#1E293B', paddingTop: 8 },
   adminLabel: { color: '#94A3B8', fontSize: 12, paddingHorizontal: 16, paddingBottom: 4 },
+  cfgLabel: { color: '#64748B', fontSize: 11, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 2, textTransform: 'uppercase', letterSpacing: 1 },
+  cfgRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 4 },
+  cfgKey: { color: '#94A3B8', fontSize: 13 },
+  cfgInput: { backgroundColor: '#1E293B', color: '#F8FAFC', borderRadius: 6, padding: 6, fontSize: 14, width: 80, textAlign: 'right' },
   createButton: { backgroundColor: '#16A34A' },
   createSuccess: { color: '#4ADE80', fontSize: 13, paddingHorizontal: 16, paddingBottom: 8 },
 });

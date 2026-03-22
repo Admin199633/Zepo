@@ -4,8 +4,6 @@ PATCH /clubs/{club_id}/table/config
 """
 from __future__ import annotations
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
@@ -29,24 +27,13 @@ class TableConfigDTO(BaseModel):
     turn_timer_seconds: int
     max_players: int
     house_rules: list[str]
+    rule_params: dict = {}
 
 
 class TableResponse(BaseModel):
     table_id: str
     config: TableConfigDTO
     recent_hands: list[dict]  # serialised HandSummary dicts
-
-
-class TableConfigPatch(BaseModel):
-    small_blind: Optional[int] = None
-    big_blind: Optional[int] = None
-    turn_timer_seconds: Optional[int] = None
-    max_players: Optional[int] = None
-    house_rules: Optional[list[str]] = None
-
-
-class TableConfigResponse(BaseModel):
-    config: TableConfigDTO
 
 
 def _config_dto(config: TableConfig) -> TableConfigDTO:
@@ -57,6 +44,7 @@ def _config_dto(config: TableConfig) -> TableConfigDTO:
         turn_timer_seconds=config.turn_timer_seconds,
         max_players=config.max_players,
         house_rules=list(config.house_rules),
+        rule_params=dict(config.rule_params),
     )
 
 
@@ -100,43 +88,3 @@ async def get_club_table(
     )
 
 
-@router.patch("/{club_id}/table/config", response_model=TableConfigResponse)
-async def update_table_config(
-    club_id: str,
-    body: TableConfigPatch,
-    current_user: User = Depends(get_current_user),
-    persistence: PersistenceAdapter = Depends(get_persistence),
-) -> TableConfigResponse:
-    club = await persistence.get_club(club_id)
-    if club is None:
-        raise http_error("NOT_FOUND", "Club not found.", status=404)
-    if not club.is_admin(current_user.id):
-        raise http_error("NOT_ADMIN", "Only admins can update table config.", status=403)
-
-    table = await persistence.get_club_table(club_id)
-    if table is None:
-        raise http_error("NOT_FOUND", "Table not found.", status=404)
-
-    cfg = table.config
-    updates = body.model_dump(exclude_none=True)
-
-    # Apply partial update
-    new_cfg = TableConfig(
-        starting_stack=cfg.starting_stack,
-        small_blind=updates.get("small_blind", cfg.small_blind),
-        big_blind=updates.get("big_blind", cfg.big_blind),
-        turn_timer_seconds=updates.get("turn_timer_seconds", cfg.turn_timer_seconds),
-        max_players=updates.get("max_players", cfg.max_players),
-        house_rules=updates.get("house_rules", list(cfg.house_rules)),
-    )
-
-    # Basic validation
-    if new_cfg.big_blind < new_cfg.small_blind * 2:
-        raise http_error("INVALID_CONFIG", "big_blind must be >= 2 × small_blind.")
-    if not (2 <= new_cfg.max_players <= 10):
-        raise http_error("INVALID_CONFIG", "max_players must be between 2 and 10.")
-
-    table.config = new_cfg
-    await persistence.save_table(table)
-
-    return TableConfigResponse(config=_config_dto(new_cfg))

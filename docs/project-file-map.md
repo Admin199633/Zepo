@@ -284,26 +284,26 @@ Zepo/
 | `config.py` | App config / env vars |
 | `dependencies.py` | FastAPI dependency injection |
 | `session_registry.py` | Table session registry |
-| `dev_seed.py` | Dev data seeding |
-| `api/auth_router.py` | OTP auth endpoints |
-| `api/clubs_router.py` | Club CRUD endpoints |
+| `dev_seed.py` | Dev data seeding; seeds Admin user (idempotent) |
+| `api/auth_router.py` | Username/password auth endpoints (register, login) |
+| `api/clubs_router.py` | Club CRUD endpoints; POST /clubs/join |
 | `api/tables_router.py` | Table config endpoints |
 | `api/health_router.py` | Health check endpoint |
-| `auth/service.py` | OTP auth logic |
+| `auth/service.py` | Username/password auth logic (bcrypt) |
 | `auth/models.py` | Auth data models |
 | `clubs/service.py` | Club business logic |
 | `clubs/models.py` | Club data models |
 | `tables/service.py` | Table management logic |
 | `tables/models.py` | Table data models |
-| `sessions/session_manager.py` | Per-table WS session orchestrator |
+| `sessions/session_manager.py` | Per-table WS session orchestrator; handles rebuy |
 | `sessions/models.py` | Session state models |
 | `realtime/ws_router.py` | WebSocket route handler |
 | `realtime/ws_broadcaster.py` | WS message broadcaster |
 | `realtime/broadcaster.py` | Broadcast service interface |
-| `realtime/schemas.py` | WS message Pydantic schemas |
+| `realtime/schemas.py` | WS message Pydantic schemas; REBUY, PLAYER_REBOUGHT |
 | `persistence/adapter.py` | Persistence interface |
 | `persistence/memory.py` | In-memory persistence |
-| `persistence/sqlite_adapter.py` | SQLite persistence |
+| `persistence/sqlite_adapter.py` | SQLite persistence; auto-migrates rebuy columns |
 | `analytics/service.py` | Analytics event service |
 | `analytics/events.py` | Analytics event types |
 | `chat/service.py` | Chat message service |
@@ -312,13 +312,13 @@ Zepo/
 ### poker_engine/
 | File | Purpose |
 |---|---|
-| `engine/models.py` | Core dataclasses (Card, GameState, events) |
+| `engine/models.py` | Core dataclasses (Card, GameState, PlayerSession with rebuy fields, events) |
 | `engine/game_engine.py` | Hand state machine |
 | `engine/evaluator.py` | 5-7 card hand evaluator |
 | `engine/deck.py` | Deck / deal utilities |
 | `engine/pot_calculator.py` | Pot split / side pot logic |
 | `engine/validator.py` | Action legality checks |
-| `engine/view_builder.py` | Player-safe state snapshot builder |
+| `engine/view_builder.py` | Player-safe state snapshot builder; exposes rebuy fields |
 | `rules/base.py` | House rules interface |
 | `rules/builtin_rules.py` | Default house rules |
 
@@ -357,19 +357,19 @@ Zepo/
 | File | Purpose |
 |---|---|
 | `app/_layout.tsx` | Root navigation layout |
-| `app/(auth)/login.tsx` | Phone login screen |
-| `app/(auth)/verify.tsx` | OTP verify screen |
-| `app/(app)/index.tsx` | Club list / home screen |
+| `app/(auth)/login.tsx` | Combined login + register screen (username/password) |
+| `app/(auth)/verify.tsx` | Redirects to login (legacy OTP stub) |
+| `app/(app)/index.tsx` | Club list / home screen; join club; Admin create-club |
 | `app/(app)/clubs/[clubId].tsx` | Club detail screen |
-| `app/(app)/table/[tableId].tsx` | Live table screen |
+| `app/(app)/table/[tableId].tsx` | Live table screen; rebuy modal |
 | `src/api/client.ts` | Axios HTTP client |
-| `src/api/auth.ts` | Auth API calls |
+| `src/api/auth.ts` | Auth API calls (register, login) |
 | `src/api/clubs.ts` | Clubs API calls |
 | `src/api/tables.ts` | Tables API calls |
 | `src/api/types.ts` | API response types |
-| `src/store/authStore.ts` | Auth Zustand store |
+| `src/store/authStore.ts` | Auth Zustand store; persists token, userId, displayName |
 | `src/store/clubStore.ts` | Club list Zustand store |
-| `src/store/tableStore.ts` | Table game state Zustand store |
+| `src/store/tableStore.ts` | Table game state Zustand store; sendRebuy, PLAYER_REBOUGHT handler |
 | `src/ws/SocketClient.ts` | WebSocket client with reconnect |
 | `src/ws/types.ts` | WS message TypeScript types |
 | `src/utils/logger.ts` | Table event logger |
@@ -383,7 +383,7 @@ Zepo/
 | `src/components/table/HandInfoBar.tsx` | Phase / pot info bar |
 | `src/components/table/HandResultOverlay.tsx` | Hand end winner overlay |
 | `src/components/table/MyHoleCards.tsx` | Player's own hole cards |
-| `src/components/table/PlayerList.tsx` | Player rows with status/bet |
+| `src/components/table/PlayerList.tsx` | Player rows with status/bet/rebuy badge |
 | `src/components/table/RaisePanel.tsx` | Raise amount slider panel |
 | `src/components/table/RoleBadge.tsx` | Player/watcher role badge |
 

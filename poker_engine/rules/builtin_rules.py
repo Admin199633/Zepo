@@ -67,7 +67,8 @@ class BonusTwoSeven(HouseRule):
         if not (has_two and has_seven and is_offsuit):
             return []
 
-        bonus_amount = state.config.big_blind
+        params = state.config.rule_params.get("bonus_27", {})
+        bonus_amount = params.get("bonus_amount", state.config.big_blind)
         transfers: list[BonusTransfer] = []
         for uid, player in state.players.items():
             if uid == winner_id:

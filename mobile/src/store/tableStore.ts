@@ -4,6 +4,7 @@ import { SocketClient } from '../ws/SocketClient';
 import { TableLogger } from '../utils/logger';
 import type {
   BackendStateSnapshotDTO,
+  ChatMessageDTO,
   ConnectionStatus,
   HandEndedPayload,
   HandViewDTO,
@@ -21,6 +22,7 @@ interface TableState {
   // Per-player last action label for the current hand (reset on new hand).
   // Key: user_id, Value: formatted label e.g. "Fold", "Check", "Call 5", "Raise 20", "All-in"
   lastActions: Record<string, string>;
+  chatMessages: ChatMessageDTO[];
 
   connect: (tableId: string, token: string) => void;
   disconnect: () => void;
@@ -28,6 +30,8 @@ interface TableState {
   sendSyncRequest: () => void;
   sendSitIn: () => void;
   sendSitOut: () => void;
+  sendRebuy: (amount: number) => void;
+  sendChat: (message: string) => void;
   sendAction: (type: 'FOLD' | 'CHECK' | 'CALL' | 'RAISE', amount?: number) => void;
   clearHandResult: () => void;
   reset: () => void;
@@ -66,6 +70,8 @@ export const useTableStore = create<TableState>((set, get) => {
         hole_cards: raw.hand?.hole_cards[p.user_id] ?? null,
         current_bet: raw.hand?.betting.bets_by_player[p.user_id] ?? 0,
         reserve_until: null,
+        original_buy_in: p.original_buy_in ?? 0,
+        rebuy_count: p.rebuy_count ?? 0,
       }));
 
       // Transform hand
@@ -303,6 +309,32 @@ export const useTableStore = create<TableState>((set, get) => {
           },
         });
       }
+    } else if (envelope.type === 'PLAYER_REBOUGHT') {
+      const reboughtUserId = envelope.payload['user_id'] as string | undefined;
+      const newStack = envelope.payload['new_stack'] as number | undefined;
+      const rebuyCount = envelope.payload['rebuy_count'] as number | undefined;
+      const current = get().gameState;
+      if (current && reboughtUserId !== undefined && newStack !== undefined && rebuyCount !== undefined) {
+        set({
+          gameState: {
+            ...current,
+            players: current.players.map((p) =>
+              p.user_id === reboughtUserId
+                ? { ...p, stack: newStack, rebuy_count: rebuyCount }
+                : p
+            ),
+          },
+        });
+      }
+    } else if (envelope.type === 'CHAT_MESSAGE') {
+      const msg: ChatMessageDTO = {
+        message_id: envelope.payload['message_id'] as string,
+        user_id: envelope.payload['user_id'] as string,
+        display_name: envelope.payload['display_name'] as string,
+        message: envelope.payload['message'] as string,
+        ts: envelope.payload['ts'] as number,
+      };
+      set((s) => ({ chatMessages: [...s.chatMessages, msg] }));
     } else if (envelope.type === 'ERROR') {
       const msg =
         (envelope.payload['message'] as string | undefined) ?? 'An error occurred.';
@@ -337,6 +369,7 @@ export const useTableStore = create<TableState>((set, get) => {
     joinPending: false,
     error: null,
     lastActions: {},
+    chatMessages: [],
 
     connect: (tableId, token) => {
       TableLogger.log('connect', { tableId });
@@ -350,7 +383,7 @@ export const useTableStore = create<TableState>((set, get) => {
       savedTableId = null;
       savedToken = null;
       socketClient.disconnect();
-      set({ gameState: null, handResult: null, joinPending: false, lastActions: {} });
+      set({ gameState: null, handResult: null, joinPending: false, lastActions: {}, chatMessages: [] });
     },
 
     sendJoin: (role) => {
@@ -371,6 +404,16 @@ export const useTableStore = create<TableState>((set, get) => {
 
     sendSitOut: () => {
       socketClient.send('SIT_OUT');
+    },
+
+    sendRebuy: (amount) => {
+      socketClient.send('REBUY', { amount });
+    },
+
+    sendChat: (message) => {
+      const trimmed = message.trim();
+      if (!trimmed) return;
+      socketClient.send('CHAT', { message: trimmed });
     },
 
     sendAction: (type, amount) => {
@@ -396,6 +439,7 @@ export const useTableStore = create<TableState>((set, get) => {
         joinPending: false,
         error: null,
         lastActions: {},
+        chatMessages: [],
       });
     },
   };

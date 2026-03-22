@@ -245,6 +245,7 @@ class ServerEventType(str, Enum):
     PLAYER_JOINED     = "PLAYER_JOINED"
     PLAYER_LEFT       = "PLAYER_LEFT"
     ERROR             = "ERROR"
+    PLAYER_REBOUGHT   = "PLAYER_REBOUGHT"
 
 
 # ---------------------------------------------------------------------------
@@ -295,6 +296,7 @@ class ClientMessageType(str, Enum):
     SYNC_REQUEST = "SYNC_REQUEST"
     SIT_OUT      = "SIT_OUT"
     SIT_IN       = "SIT_IN"
+    REBUY        = "REBUY"
 
 
 class ClientEnvelope(BaseModel):
@@ -337,3 +339,21 @@ class ChatPayload(BaseModel):
 
 class JoinTablePayload(BaseModel):
     role: Literal["player", "spectator"] = "player"
+
+
+class RebuyPayload(BaseModel):
+    amount: int
+
+    @field_validator("amount")
+    @classmethod
+    def amount_positive(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("rebuy amount must be > 0")
+        return v
+
+
+class PlayerReboughtPayload(BaseModel):
+    user_id: str
+    amount: int
+    new_stack: int
+    rebuy_count: int

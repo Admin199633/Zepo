@@ -46,7 +46,8 @@ from ..realtime.schemas import (
     BlindsPostedPayload, BonusAwardedPayload, CardDTO, CardsDealtPayload,
     ChatMessagePayload, CommunityCardsPayload, HandResultPayload,
     PhaseChangedPayload, PlayerActedPayload, PlayerJoinedPayload,
-    PlayerLeftPayload, PlayerStatusPayload, PotDTO, PotUpdatedPayload,
+    PlayerLeftPayload, PlayerReboughtPayload, PlayerStatusPayload,
+    PotDTO, PotUpdatedPayload,
     ServerEnvelope, ServerEventType, ShowdownHandDTO, StateSnapshotDTO,
     TurnChangedPayload, WinnerEntryDTO,
 )
@@ -178,6 +179,7 @@ class TableSessionManager:
                 seat_index=seat_index,
                 stack=self._config.starting_stack,
                 status=status,
+                original_buy_in=self._config.starting_stack,
             )
 
             # Mutate state
@@ -345,6 +347,39 @@ class TableSessionManager:
             )
             await self._persistence.save_player_session(self._table_id, player)
             await self._maybe_start_hand_unlocked()
+
+    async def rebuy(self, user_id: str, amount: int) -> None:
+        async with self._lock:
+            player = self._state.players.get(user_id)
+            if player is None:
+                return  # not seated
+
+            # Only between hands
+            hand_active = (
+                self._state.hand is not None
+                and self._state.phase not in (HandPhase.WAITING_FOR_PLAYERS, HandPhase.HAND_END)
+            )
+            if hand_active:
+                return
+
+            # Cap at half the original buy-in
+            max_rebuy = player.original_buy_in // 2
+            if amount > max_rebuy or amount <= 0:
+                return
+
+            player.stack += amount
+            player.rebuy_count += 1
+
+            await self._persistence.save_player_session(self._table_id, player)
+            await self._broadcast_all(
+                ServerEventType.PLAYER_REBOUGHT,
+                PlayerReboughtPayload(
+                    user_id=user_id,
+                    amount=amount,
+                    new_stack=player.stack,
+                    rebuy_count=player.rebuy_count,
+                ),
+            )
 
     # -----------------------------------------------------------------------
     # Public: Actions

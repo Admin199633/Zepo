@@ -40,8 +40,23 @@ export interface OtpVerifyBody {
 // Clubs
 // ---------------------------------------------------------------------------
 
+export interface HouseRuleConfig {
+  rule_id: string;
+  params?: Record<string, unknown>;
+}
+
+export interface TableConfigInput {
+  starting_stack?: number;
+  small_blind?: number;
+  big_blind?: number;
+  turn_timer_seconds?: number;
+  max_players?: number;
+  house_rules?: HouseRuleConfig[];
+}
+
 export interface CreateClubBody {
   name: string;
+  table_config?: TableConfigInput;
 }
 
 export interface CreateClubResponse {
