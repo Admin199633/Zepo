@@ -922,6 +922,12 @@ class TableSessionManager:
             "winner_ids": winner_ids,
             "winner_names": winner_names,
             "player_ids": summary.player_ids,
+            "stacks_before": dict(summary.stacks_before),
+            "stacks_after": dict(summary.stacks_after),
+            "community_cards": [
+                {"rank": c.rank.value, "suit": c.suit.value}
+                for c in (hand.community_cards or [])
+            ],
             "ts": summary.timestamp,
         })
         if len(self._hand_history_cache) > 20:
@@ -1055,8 +1061,8 @@ class TableSessionManager:
         p = self._state.players.get(user_id)
         return p.display_name if p else user_id[:8]
 
-    def _feed_append(self, text: str) -> None:
-        self._action_feed.append({"text": text, "ts": time.time()})
+    def _feed_append(self, text: str, entry_type: str = "system") -> None:
+        self._action_feed.append({"type": entry_type, "text": text, "ts": time.time()})
         if len(self._action_feed) > 20:
             self._action_feed = self._action_feed[-20:]
 
@@ -1082,7 +1088,7 @@ class TableSessionManager:
                 "all_in": "all-in",
             }
             verb = verbs.get(event.action_type.value, event.action_type.value)
-            self._feed_append(f"{name} {verb}")
+            self._feed_append(f"{name} {verb}", "action")
         elif isinstance(event, EvtBlindsPosted):
             sb = self._display_name(event.small_blind_user_id)
             bb = self._display_name(event.big_blind_user_id)

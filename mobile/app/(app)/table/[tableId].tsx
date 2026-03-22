@@ -145,10 +145,22 @@ export default function TableScreen() {
   const scrollPaddingBottom = canAct ? ACTION_BAR_HEIGHT + insets.bottom + 16 : 16;
 
   // Session stats for Report modal — computed from hand history
+  const lastHand = handHistory.length > 0 ? handHistory[handHistory.length - 1] : null;
   const playerSessionStats = (gameState?.players ?? []).map((p) => {
     const played = handHistory.filter((h) => h.player_ids.includes(p.user_id)).length;
     const won = handHistory.filter((h) => h.winner_ids.includes(p.user_id)).length;
-    return { ...p, handsPlayed: played, handsWon: won };
+    const profit = handHistory.reduce((sum, h) => {
+      const before = h.stacks_before?.[p.user_id];
+      const after = h.stacks_after?.[p.user_id];
+      return before !== undefined && after !== undefined ? sum + (after - before) : sum;
+    }, 0);
+    const biggestWin = handHistory.reduce((best, h) => {
+      const before = h.stacks_before?.[p.user_id];
+      const after = h.stacks_after?.[p.user_id];
+      const delta = before !== undefined && after !== undefined ? after - before : 0;
+      return delta > best ? delta : best;
+    }, 0);
+    return { ...p, handsPlayed: played, handsWon: won, profit, biggestWin };
   });
 
   return (
@@ -380,21 +392,57 @@ export default function TableScreen() {
               {/* Player stats */}
               <Text style={styles.reportSection}>Players</Text>
               {playerSessionStats.map((p) => (
-                <View key={p.user_id} style={styles.reportRow}>
-                  <Text style={styles.reportName} numberOfLines={1}>{p.display_name}</Text>
-                  <Text style={styles.reportStat}>{p.stack} chips</Text>
+                <View key={p.user_id} style={styles.reportPlayerCard}>
+                  <View style={styles.reportRow}>
+                    <Text style={styles.reportName} numberOfLines={1}>{p.display_name}</Text>
+                    <Text style={styles.reportStat}>{p.stack} chips</Text>
+                  </View>
                   {handHistory.length > 0 && (
-                    <Text style={styles.reportStat}>{p.handsWon}/{p.handsPlayed}</Text>
+                    <View style={styles.reportStatRow}>
+                      <Text style={styles.reportStatLabel}>{p.handsWon}/{p.handsPlayed} hands</Text>
+                      <Text style={[styles.reportStatLabel, p.profit >= 0 ? styles.reportProfit : styles.reportLoss]}>
+                        {p.profit >= 0 ? '+' : ''}{p.profit}
+                      </Text>
+                      {p.biggestWin > 0 && (
+                        <Text style={styles.reportStatLabel}>best +{p.biggestWin}</Text>
+                      )}
+                    </View>
                   )}
                 </View>
               ))}
 
-              {/* Current pot breakdown */}
-              {gameState?.current_hand && (
+              {/* Pot breakdown */}
+              <Text style={styles.reportSection}>Pot</Text>
+              {gameState?.current_hand ? (
                 <>
-                  <Text style={styles.reportSection}>Current Pot</Text>
                   <Text style={styles.reportPot}>Total: {gameState.current_hand.live_pot}</Text>
+                  {gameState.players.filter((p) => p.current_bet > 0).map((p) => (
+                    <View key={p.user_id} style={styles.reportHistoryRow}>
+                      <Text style={styles.reportHistoryNum} numberOfLines={1}>{p.display_name}</Text>
+                      <Text style={styles.reportHistoryDetail}>{p.current_bet} in</Text>
+                    </View>
+                  ))}
                 </>
+              ) : lastHand ? (
+                <>
+                  <Text style={styles.reportPot}>Hand #{lastHand.hand_number} · {lastHand.pot_total} total</Text>
+                  {lastHand.player_ids.map((uid) => {
+                    const before = lastHand.stacks_before?.[uid] ?? 0;
+                    const after = lastHand.stacks_after?.[uid] ?? 0;
+                    const delta = after - before;
+                    const name = gameState?.players.find((p) => p.user_id === uid)?.display_name ?? uid.slice(0, 8);
+                    return (
+                      <View key={uid} style={styles.reportHistoryRow}>
+                        <Text style={styles.reportHistoryNum} numberOfLines={1}>{name}</Text>
+                        <Text style={[styles.reportHistoryDetail, delta >= 0 ? styles.reportProfit : styles.reportLoss]}>
+                          {delta >= 0 ? '+' : ''}{delta}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </>
+              ) : (
+                <Text style={styles.reportHistoryDetail}>No hand data yet</Text>
               )}
 
               {/* Hand history */}
@@ -402,11 +450,15 @@ export default function TableScreen() {
                 <>
                   <Text style={styles.reportSection}>Recent Hands</Text>
                   {[...handHistory].reverse().slice(0, 5).map((h) => (
-                    <View key={h.hand_number} style={styles.reportHistoryRow}>
-                      <Text style={styles.reportHistoryNum}>#{h.hand_number}</Text>
+                    <View key={h.hand_number} style={[styles.reportHistoryRow, { flexDirection: 'column', alignItems: 'flex-start', gap: 2 }]}>
                       <Text style={styles.reportHistoryDetail}>
-                        Pot {h.pot_total} — {h.winner_names.join(', ')}
+                        #{h.hand_number} · pot {h.pot_total} · {h.winner_names.join(', ')}
                       </Text>
+                      {(h.community_cards?.length ?? 0) > 0 && (
+                        <Text style={styles.reportHistoryNum}>
+                          {h.community_cards.map((c) => c.rank + c.suit.slice(0, 1).toLowerCase()).join(' ')}
+                        </Text>
+                      )}
                     </View>
                   ))}
                 </>
@@ -417,7 +469,9 @@ export default function TableScreen() {
                 <>
                   <Text style={styles.reportSection}>Recent Actions</Text>
                   {[...actionFeed].reverse().map((entry, i) => (
-                    <Text key={i} style={styles.reportFeedEntry}>{entry.text}</Text>
+                    <Text key={i} style={[styles.reportFeedEntry, entry.type === 'action' ? styles.reportFeedAction : styles.reportFeedSystem]}>
+                      {entry.text}
+                    </Text>
                   ))}
                 </>
               )}
@@ -551,5 +605,12 @@ const styles = StyleSheet.create({
   reportHistoryRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, gap: 8 },
   reportHistoryNum: { color: '#64748B', fontSize: 12, minWidth: 36 },
   reportHistoryDetail: { color: '#CBD5E1', fontSize: 13, flex: 1 },
-  reportFeedEntry: { color: '#94A3B8', fontSize: 13, paddingVertical: 3, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
+  reportFeedEntry: { fontSize: 13, paddingVertical: 3, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
+  reportFeedAction: { color: '#CBD5E1' },
+  reportFeedSystem: { color: '#64748B', fontStyle: 'italic' },
+  reportProfit: { color: '#4ADE80' },
+  reportLoss: { color: '#F87171' },
+  reportPlayerCard: { marginBottom: 2 },
+  reportStatRow: { flexDirection: 'row', gap: 12, paddingBottom: 6, paddingLeft: 2 },
+  reportStatLabel: { color: '#64748B', fontSize: 12 },
 });

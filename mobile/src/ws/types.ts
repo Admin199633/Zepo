@@ -153,6 +153,7 @@ export interface BackendHandViewDTO {
 }
 
 export interface ActionFeedEntry {
+  type: 'system' | 'action';
   text: string;
   ts: number;
 }
@@ -163,6 +164,9 @@ export interface HandHistoryEntry {
   winner_ids: string[];
   winner_names: string[];
   player_ids: string[];
+  stacks_before: Record<string, number>;
+  stacks_after: Record<string, number>;
+  community_cards: Array<{ rank: string; suit: string }>;
   ts: number;
 }
 
