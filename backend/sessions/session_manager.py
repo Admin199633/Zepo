@@ -644,9 +644,10 @@ class TableSessionManager:
         ):
             return  # hand already in progress
 
+        # Players folded in previous hand must be eligible for the next hand.
         eligible = [
             p for p in self._state.players.values()
-            if p.status in (PlayerStatus.ACTIVE, PlayerStatus.WAITING)
+            if p.status in (PlayerStatus.ACTIVE, PlayerStatus.WAITING, PlayerStatus.FOLDED)
             and p.stack > 0
             and p.is_connected
         ]
@@ -667,9 +668,10 @@ class TableSessionManager:
             ):
                 return
 
+            # Players folded in previous hand must be eligible for the next hand.
             eligible = [
                 p for p in self._state.players.values()
-                if p.status in (PlayerStatus.ACTIVE, PlayerStatus.WAITING)
+                if p.status in (PlayerStatus.ACTIVE, PlayerStatus.WAITING, PlayerStatus.FOLDED)
                 and p.stack > 0
             ]
             if len(eligible) < 2:

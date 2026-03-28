@@ -68,15 +68,16 @@ class GameEngine:
         state = copy.deepcopy(state)
         events: list[EngineEvent] = []
 
-        eligible = self._eligible_players(state)
-        assert len(eligible) >= 2, "Need at least 2 players to start a hand"
-
-        # Reset statuses
+        # Players folded in previous hand must be eligible for the next hand.
+        # Reset statuses before eligibility check so FOLDED players are counted.
         for uid, p in state.players.items():
             if p.status == PlayerStatus.WAITING:
                 p.status = PlayerStatus.ACTIVE
             elif p.status in (PlayerStatus.FOLDED, PlayerStatus.ALL_IN):
                 p.status = PlayerStatus.ACTIVE if p.stack > 0 else PlayerStatus.SIT_OUT
+
+        eligible = self._eligible_players(state)
+        assert len(eligible) >= 2, "Need at least 2 players to start a hand"
 
         state.hand_number += 1
         state.phase = HandPhase.START_HAND
